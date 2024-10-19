@@ -1,2 +1,2 @@
-# Video_Quality_Compare
+# Video Quality Compare
 GUI with VMAF SSIM PSNR ...
