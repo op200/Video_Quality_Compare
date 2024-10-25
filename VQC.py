@@ -25,7 +25,7 @@ import re
 from time import sleep
 
 PROGRAM_NAME = "Video Quality Compare"
-VERSION = "1.0"
+VERSION = "1.0.1"
 HOME_LINK = "https://github.com/op200/Video_Quality_Compare"
 
 #日志
@@ -824,7 +824,7 @@ def Thread_encoding():
         '-i', str(input_video_path_2),
         '-lavfi',algorithm.filter_option+config_dir.replace("C:","",1).replace('\\',"/")+"/output.log",
         '-f','null','-'
-    ],stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    ],stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace')
 
     while True:
         line = process_ffmpeg.stdout.readline()
