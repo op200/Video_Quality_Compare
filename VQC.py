@@ -5,8 +5,8 @@ import cv2
 from PIL import Image, ImageTk
 import numpy as np
 
-# import matplotlib
-# matplotlib.use('TkAgg')
+import matplotlib
+matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 import mplcursors
@@ -25,7 +25,7 @@ import re
 from time import sleep
 
 PROGRAM_NAME = "Video Quality Compare"
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 HOME_LINK = "https://github.com/op200/Video_Quality_Compare"
 
 #日志
@@ -39,15 +39,15 @@ class log:
 
     @staticmethod
     def error(info:str):
-        log.output(f"[ERROR] {info}")
+        log.output(f"[{PROGRAM_NAME} ERROR] {info}")
 
     @staticmethod
     def warning(info:str):
-        log.output(f"[WARNING] {info}")
+        log.output(f"[{PROGRAM_NAME} WARNING] {info}")
 
     @staticmethod
     def info(info:str):
-        log.output(f"[INFO] {info}")
+        log.output(f"[{PROGRAM_NAME} INFO] {info}")
 
 
 import platform
@@ -806,7 +806,7 @@ def flush_ffmpeg_speed_progress(frame):
     frame-=1
     if frame >= frame_count:
         frame_now = frame_count-1
-        log.warning(f"ffmpeg 解码的视频帧数({frame})与 cv2 解码的帧数({frame_count})不一致")
+        log.warning(f"ffmpeg 解码的视频帧数({frame+1})与 cv2 解码的帧数({frame_count})不一致")
     else:
         frame_now = frame
     jump_to_frame()
@@ -831,24 +831,25 @@ def Thread_encoding():
         if not line and process_ffmpeg.poll() is not None:
             break
         if line:
-            print(f"ffmpeg out: {line}", end='')
+            print(f"ffmpeg info: {line}", end='')
             frame = re.search(r"frame=\s*(\d+)\s",line)
             if frame:
                 flush_ffmpeg_speed_progress(int(frame.group(1)))
     process_ffmpeg.wait()
 
-    algorithm.data=[]
-    with open(config_dir+"\\output.log", 'r', encoding='utf-8') as file:
-        algorithm.read_file(file)
+    if algorithm.is_encoding:
+        algorithm.data=[]
+        with open(config_dir+"\\output.log", 'r', encoding='utf-8') as file:
+            algorithm.read_file(file)
 
-    algorithm.get_data()
+        algorithm.get_data()
 
-    max_data_Label.config(state=tk.NORMAL,text=f"Max:{algorithm.max_data}")
-    avg_data_Label.config(state=tk.NORMAL,text=f"Avg:{algorithm.avg_data}")
-    min_data_Label.config(state=tk.NORMAL,text=f"Min:{algorithm.min_data}")
+        max_data_Label.config(state=tk.NORMAL,text=f"Max:{algorithm.max_data}")
+        avg_data_Label.config(state=tk.NORMAL,text=f"Avg:{algorithm.avg_data}")
+        min_data_Label.config(state=tk.NORMAL,text=f"Min:{algorithm.min_data}")
 
-    log.info("完成")
-    algorithm.is_encoding = False
+        log.info("完成")
+        algorithm.is_encoding = False
     end_to_ready()
 
 
@@ -867,6 +868,7 @@ def start_encoding():
 
 def cancel_encoding():
     log.warning("手动强制终止")
+    algorithm.is_encoding = False
     try:
         process_ffmpeg.kill()
     except:
