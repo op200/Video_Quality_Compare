@@ -25,29 +25,29 @@ import re
 from time import sleep
 
 PROGRAM_NAME = "Video Quality Compare"
-VERSION = "1.0.2"
+VERSION = "1.0.2_c1"
 HOME_LINK = "https://github.com/op200/Video_Quality_Compare"
 
 #日志
 class log:
     @staticmethod
     def output(info:str):
-        info = info+' '+datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        info = f"[{PROGRAM_NAME} {info} {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}"
         log_Text.insert(tk.END,info+'\n')
         log_Text.see(tk.END)
         print(info)
 
     @staticmethod
     def error(info:str):
-        log.output(f"[{PROGRAM_NAME} ERROR] {info}")
+        log.output(f"ERROR] {info}")
 
     @staticmethod
     def warning(info:str):
-        log.output(f"[{PROGRAM_NAME} WARNING] {info}")
+        log.output(f"WARNING] {info}")
 
     @staticmethod
     def info(info:str):
-        log.output(f"[{PROGRAM_NAME} INFO] {info}")
+        log.output(f"INFO] {info}")
 
 
 import platform
@@ -85,7 +85,7 @@ def save_config():
         with open(config_file_pathname, 'w') as configfile:
             config.write(configfile)
     except FileNotFoundError:
-        pass
+        log.error("saveFile: FileNotFoundError")
 
 
 
@@ -810,6 +810,7 @@ def flush_ffmpeg_speed_progress(frame):
     else:
         frame_now = frame
     jump_to_frame()
+    sleep(0.2)
 
 def Thread_encoding():
     global process_ffmpeg
@@ -861,7 +862,6 @@ def start_encoding():
 
     frame_now = 0
 
-
     Thread(target=Thread_encoding).start()
 
 
@@ -871,8 +871,8 @@ def cancel_encoding():
     algorithm.is_encoding = False
     try:
         process_ffmpeg.kill()
-    except:
-        pass
+    except Exception as e:
+        log.error("强制终止失败: 终止线程失败: "+repr(e))
     end_to_ready()
 
 
