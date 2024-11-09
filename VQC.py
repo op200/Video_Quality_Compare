@@ -25,7 +25,7 @@ import re
 from time import sleep
 
 PROGRAM_NAME = "Video Quality Compare"
-VERSION = "1.0.2_c1"
+VERSION = "1.0.2_c2"
 HOME_LINK = "https://github.com/op200/Video_Quality_Compare"
 
 #日志
@@ -84,8 +84,8 @@ def save_config():
     try:
         with open(config_file_pathname, 'w') as configfile:
             config.write(configfile)
-    except FileNotFoundError:
-        log.error("saveFile: FileNotFoundError")
+    except FileNotFoundError as e:
+        log.error("保存配置文件失败: "+repr(e))
 
 
 
