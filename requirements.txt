@@ -1,0 +1,6 @@
+nuitka
+opencv-python
+pillow
+numpy
+matplotlib
+mplcursors
