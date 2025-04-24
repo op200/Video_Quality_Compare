@@ -8,7 +8,9 @@ import subprocess
 from datetime import datetime
 import re
 from time import sleep
-
+import os
+import webbrowser
+from threading import Thread
 import configparser
 import platform
 
@@ -23,12 +25,8 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 import mplcursors
 
-from threading import Thread
-
-import os
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "True"
-import webbrowser
 
 
 def hyperlink_jump(hyperlink: str):
@@ -80,8 +78,6 @@ else:
     log.warning("无法确认系统")
 
 os.makedirs(config_dir, exist_ok=True)
-
-ocr_choice: int = 1
 
 
 # 不存在配置则写入默认配置
