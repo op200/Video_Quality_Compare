@@ -1,4 +1,6 @@
 import ctypes
+from ctypes import wintypes
+import enum
 import tkinter as tk
 from tkinter import filedialog
 from tkinter import ttk
@@ -34,30 +36,106 @@ def hyperlink_jump(hyperlink: str):
 
 
 PROGRAM_NAME = "Video Quality Compare"
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 HOME_LINK = "https://github.com/op200/Video_Quality_Compare"
 
 
 # 日志
 class log:
-    @staticmethod
-    def _output(info: str):
-        info = f"{datetime.now().strftime('%Y.%m.%d %H:%M:%S')} {info}"
-        log_Text.insert(tk.END, info + "\n")
-        log_Text.see(tk.END)
-        print(info)
+    class LogLevel(enum.Enum):
+        info = enum.auto()
+        warning = enum.auto()
+        error = enum.auto()
+
+    default_foreground_color: int = 39
+    default_background_color: int = 49
 
     @staticmethod
-    def error(info: str):
-        log._output(f"[VQC ERROR] {info}")
+    def _output(msg: str, log_level: LogLevel, is_print_gui: bool = True):
+        time = datetime.now().strftime("%Y.%m.%d %H:%M:%S")
+
+        print(
+            f"""\033[{92 if log.default_background_color == 42 else 32}m{time} {
+                dict(
+                    {
+                        log.LogLevel.info: f"\033[{94 if log.default_background_color == 44 else 34}m",
+                        log.LogLevel.warning: f"\033[{93 if log.default_background_color == 43 else 33}m",
+                        log.LogLevel.error: f"\033[{91 if log.default_background_color == 41 else 31}m",
+                    }
+                )[log_level]
+            }{msg}\033[{log.default_foreground_color}m"""
+        )
+
+        if is_print_gui:
+            log_Text.insert(tk.END, f"{time} {msg}\n")
+            log_Text.see(tk.END)
 
     @staticmethod
-    def warning(info: str):
-        log._output(f"[VQC WARNING] {info}")
+    def error(msg: str, is_print_gui: bool = True):
+        log._output(
+            f"[VQC ERROR] {msg}",
+            log.LogLevel.error,
+            is_print_gui,
+        )
 
     @staticmethod
-    def info(info: str):
-        log._output(f"[VQC INFO] {info}")
+    def warning(msg: str, is_print_gui: bool = True):
+        log._output(
+            f"[VQC WARNING] {msg}",
+            log.LogLevel.warning,
+            is_print_gui,
+        )
+
+    @staticmethod
+    def info(msg: str, is_print_gui: bool = True):
+        log._output(
+            f"[VQC INFO] {msg}",
+            log.LogLevel.info,
+            is_print_gui,
+        )
+
+
+# 获取终端颜色
+if os.name == "nt":
+
+    class CONSOLE_SCREEN_BUFFER_INFO(ctypes.Structure):
+        _fields_ = [
+            ("dwSize", wintypes._COORD),
+            ("dwCursorPosition", wintypes._COORD),
+            ("wAttributes", wintypes.WORD),
+            ("srWindow", wintypes.SMALL_RECT),
+            ("dwMaximumWindowSize", wintypes._COORD),
+        ]
+
+    csbi = CONSOLE_SCREEN_BUFFER_INFO()
+    hOut = ctypes.windll.kernel32.GetStdHandle(-11)
+    ctypes.windll.kernel32.FlushConsoleInputBuffer(hOut)
+    ctypes.windll.kernel32.GetConsoleScreenBufferInfo(hOut, ctypes.byref(csbi))
+    attributes = csbi.wAttributes
+    color_map = {
+        0: 0,  # 黑色
+        1: 4,  # 蓝色
+        2: 2,  # 绿色
+        3: 6,  # 青色
+        4: 1,  # 红色
+        5: 5,  # 紫红色
+        6: 3,  # 黄色
+        7: 7,  # 白色
+    }
+
+    log.default_foreground_color = (
+        30 + color_map.get(attributes & 0x0007, 9) + 60 * ((attributes & 0x0008) != 0)
+    )
+    log.default_background_color = (
+        40
+        + color_map.get((attributes >> 4) & 0x0007, 9)
+        + 60 * ((attributes & 0x0080) != 0)
+    )
+
+    if log.default_foreground_color == 37:
+        log.default_foreground_color = 39
+    if log.default_background_color == 40:
+        log.default_background_color = 49
 
 
 if os.name == "nt":
@@ -248,33 +326,55 @@ cut_scale_x = 0
 cut_scale_y = 0
 
 
+is_do_jump_to_frame: bool = False
+
+
 # 跳转当前帧
-def jump_to_frame():
-    global scale, frame_now, frame_count
-    main_rendering_Cap.set(cv2.CAP_PROP_POS_FRAMES, frame_now)
-    frame = main_rendering_Cap.read()[1]
-    try:
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    except cv2.error:
-        log.warning(f"[{frame_now}]该帧无法读取(应检查视频封装)")
-    else:
-        if scale:
-            if cut_scale:
-                frame = frame[
-                    cut_scale_y : cut_scale_y + new_frame_height,
-                    cut_scale_x : cut_scale_x + new_frame_width,
-                ]
-            else:
-                frame = cv2.resize(frame, (new_frame_width, new_frame_height))
+def _jump_to_frame(sleep_sec: float):
+    global frame_now, is_do_jump_to_frame
+    if is_do_jump_to_frame:
+        return
+    is_do_jump_to_frame = True
 
-        video_Progressbar["value"] = frame_now / (frame_count - 1) * 100
+    while True:
+        frame_now_cache = frame_now
 
-        photo = ImageTk.PhotoImage(Image.fromarray(frame))
-        video_review_Label.config(image=photo)
-        video_review_Label.image = photo  # type: ignore
+        main_rendering_Cap.set(cv2.CAP_PROP_POS_FRAMES, frame_now)
+        frame = main_rendering_Cap.read()[1]
+        try:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        except cv2.error:
+            log.warning(f"[{frame_now}]该帧无法读取(应检查视频封装)")
+        else:
+            if scale:
+                if cut_scale:
+                    frame = frame[
+                        cut_scale_y : cut_scale_y + new_frame_height,
+                        cut_scale_x : cut_scale_x + new_frame_width,
+                    ]
+                else:
+                    frame = cv2.resize(frame, (new_frame_width, new_frame_height))
 
-        # set frame_now
-        frame_now_Tkint.set(frame_now)
+            video_Progressbar["value"] = frame_now / (frame_count - 1) * 100
+
+            photo = ImageTk.PhotoImage(Image.fromarray(frame))
+            video_review_Label.config(image=photo)
+            video_review_Label.image = photo  # type: ignore
+
+            # set frame_now
+            frame_now_Tkint.set(frame_now)
+
+        if frame_now_cache == frame_now:
+            break
+        else:
+            sleep(sleep_sec)
+
+    is_do_jump_to_frame = False
+
+
+def jump_to_frame(sleep_sec: float = 0):
+    Thread(target=_jump_to_frame, args=(sleep_sec,), daemon=True).start()
+    # _jump_to_frame()
 
 
 # 进度条的滚轮事件
@@ -675,6 +775,7 @@ def input_data_file():
         config_output_log_path = os.path.join(config_dir, "output.log")
         shutil.copyfile(file_path, config_output_log_path)
         algorithm.change_algorithm()
+        algorithm.data = []
         with open(config_output_log_path, "r", encoding="utf-8") as file:
             algorithm.read_file(file)
         algorithm.get_data()
@@ -787,7 +888,7 @@ class algorithm:
                 algorithm.max_data = v[3]
             if v[3] < algorithm.min_data:
                 algorithm.min_data = v[3]
-        algorithm.avg_data = round(algorithm.avg_data / frame_count, 6)
+        algorithm.avg_data = round(algorithm.avg_data / len(algorithm.data), 6)
 
     @staticmethod
     def get_data_psnr_mse():
@@ -800,7 +901,7 @@ class algorithm:
                 algorithm.max_data = v[0]
             if v[0] < algorithm.min_data:
                 algorithm.min_data = v[0]
-        algorithm.avg_data = round(algorithm.avg_data / frame_count, 2)
+        algorithm.avg_data = round(algorithm.avg_data / len(algorithm.data), 2)
 
     @staticmethod
     def get_data_vmaf():
@@ -1024,8 +1125,7 @@ def flush_ffmpeg_speed_progress(frame):
         )
     else:
         frame_now = frame
-    jump_to_frame()
-    sleep(0.2)
+    jump_to_frame(5)
 
 
 def Thread_encoding():
@@ -1036,17 +1136,17 @@ def Thread_encoding():
     algorithm.change_algorithm()
 
     ff_cmd = [
-        v
+        it
         for v in [
             "ffmpeg",
             None
             if cmp_hwaccel_1_Combobox.get() == "none"
-            else f"-hwaccel {cmp_hwaccel_1_Combobox.get()}",
+            else ("-hwaccel", cmp_hwaccel_1_Combobox.get()),
             "-i",
             str(input_video_path_1),
             None
             if cmp_hwaccel_2_Combobox.get() == "none"
-            else f"-hwaccel {cmp_hwaccel_2_Combobox.get()}",
+            else ("-hwaccel", cmp_hwaccel_2_Combobox.get()),
             "-i",
             str(input_video_path_2),
             "-lavfi",
@@ -1058,9 +1158,10 @@ def Thread_encoding():
             "-",
         ]
         if v is not None
+        for it in (v if isinstance(v, tuple) else (v,))
     ]
 
-    log.info("ffmpeg 命令: " + " ".join(ff_cmd))
+    log.info(" ".join(f'"{s}"' for s in ff_cmd), is_print_gui=False)
 
     process_ffmpeg = subprocess.Popen(
         ff_cmd,
@@ -1073,16 +1174,19 @@ def Thread_encoding():
 
     while True:
         if process_ffmpeg.stdout is None:
-            sleep(0.1)
+            sleep(0.2)
             continue
-        line = process_ffmpeg.stdout.readline()
-        if not line and process_ffmpeg.poll() is not None:
-            break
-        if line:
+
+        while line := process_ffmpeg.stdout.readline():
             print(f"ffmpeg info: {line}", end="")
-            frame = re.search(r"frame=\s*(\d+)\s", line)
-            if frame:
+            if frame := re.search(r"frame=\s*(\d+)\s", line):
                 flush_ffmpeg_speed_progress(int(frame.group(1)))
+
+        if process_ffmpeg.poll() is not None:
+            break
+
+        sleep(1)
+
     process_ffmpeg.wait()
 
     if algorithm.is_encoding:
